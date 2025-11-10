@@ -67,6 +67,12 @@ const (
 	OauthActionTypeBind  = "bind"
 )
 
+const (
+	linuxdoAuthEndpoint         = "https://connect.linux.do/oauth2/authorize"
+	linuxdoTokenEndpointPrimary = "https://connect.linux.do/oauth2/token"
+	linuxdoTokenEndpointBackup  = "https://connect.linuxdo.org/oauth2/token"
+)
+
 func (oci *OauthCacheItem) UpdateFromOauthUser(oauthUser *model.OauthUser) {
 	oci.OpenId = oauthUser.OpenId
 	oci.Username = oauthUser.Username
@@ -159,10 +165,23 @@ func (os *OauthService) GithubProvider() *oidc.Provider {
 func (os *OauthService) LinuxdoProvider() *oidc.Provider {
 	return (&oidc.ProviderConfig{
 		IssuerURL:     "",
-		AuthURL:       "https://connect.linux.do/oauth2/authorize",
-		TokenURL:      "https://connect.linux.do/oauth2/token",
+		AuthURL:       linuxdoAuthEndpoint,
+		TokenURL:      linuxdoTokenEndpointPrimary,
 		DeviceAuthURL: "",
 		UserInfoURL:   model.UserEndpointLinuxdo,
+		JWKSURL:       "",
+		Algorithms:    nil,
+	}).NewProvider(context.Background())
+}
+
+
+func (os *OauthService) LinuxdoProviderBackup() *oidc.Provider {
+	return (&oidc.ProviderConfig{
+		IssuerURL:     "",
+		AuthURL:       linuxdoAuthEndpoint,
+		TokenURL:      linuxdoTokenEndpointBackup,
+		DeviceAuthURL: "",
+		UserInfoURL:   model.UserEndpointLinuxdoBackup,
 		JWKSURL:       "",
 		Algorithms:    nil,
 	}).NewProvider(context.Background())
@@ -232,6 +251,19 @@ func getHTTPClientWithProxy() *http.Client {
 	}
 	return http.DefaultClient
 }
+
+func shouldRetryLinuxdo(err error) bool {
+	if err == nil {
+		return false
+	}
+	switch err.Error() {
+	case "GetOauthTokenError", "GetOauthUserInfoError", "DecodeOauthUserInfoError":
+		return true
+	default:
+		return false
+	}
+}
+
 func (os *OauthService) callbackBase(oauthConfig *oauth2.Config, provider *oidc.Provider, code string, verifier string, nonce string, userData interface{}) (err error, client *http.Client) {
 
 	// 设置代理客户端
@@ -317,9 +349,25 @@ func (os *OauthService) githubCallback(oauthConfig *oauth2.Config, provider *oid
 func (os *OauthService) linuxdoCallback(oauthConfig *oauth2.Config, provider *oidc.Provider, code, verifier, nonce string) (error, *model.OauthUser) {
 	var user = &model.LinuxdoUser{}
 	err, _ := os.callbackBase(oauthConfig, provider, code, verifier, nonce, user)
+	if err == nil {
+		return nil, user.ToOauthUser()
+	}
+
+	if !shouldRetryLinuxdo(err) {
+		return err, nil
+	}
+
+	Logger.Warn("linux.do primary endpoints failed, retrying with backup", err)
+
+	backupProvider := os.LinuxdoProviderBackup()
+	backupConfig := *oauthConfig
+	backupConfig.Endpoint = backupProvider.Endpoint()
+
+	err, _ = os.callbackBase(&backupConfig, backupProvider, code, verifier, nonce, user)
 	if err != nil {
 		return err, nil
 	}
+
 	return nil, user.ToOauthUser()
 }
 
