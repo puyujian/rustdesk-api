@@ -32,6 +32,7 @@ func ValidateOauthType(oauthType string) error {
 const (
 	UserEndpointGithub  string = "https://api.github.com/user"
 	UserEndpointLinuxdo string = "https://connect.linux.do/api/user"
+	UserEndpointLinuxdoBackup string = "https://connect.linuxdo.org/api/user"
 	IssuerGoogle        string = "https://accounts.google.com"
 )
 
