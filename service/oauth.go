@@ -160,7 +160,7 @@ func (os *OauthService) LinuxdoProvider() *oidc.Provider {
 	return (&oidc.ProviderConfig{
 		IssuerURL:     "",
 		AuthURL:       "https://connect.linux.do/oauth2/authorize",
-		TokenURL:      "https://connect.linux.do/oauth2/token",
+		TokenURL:      "https://connect.linuxdo.org/oauth2/token",
 		DeviceAuthURL: "",
 		UserInfoURL:   model.UserEndpointLinuxdo,
 		JWKSURL:       "",
