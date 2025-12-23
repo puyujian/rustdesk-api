@@ -50,6 +50,7 @@ func Init(g *gin.Engine) {
 
 	RustdeskCmdBind(adg)
 	DeviceGroupBind(adg)
+	PaymentBind(adg)
 	//访问静态文件
 	//g.StaticFS("/upload", http.Dir(global.Config.Gin.ResourcesPath+"/upload"))
 }
@@ -321,4 +322,34 @@ func ShareRecordBind(rg *gin.RouterGroup) {
 		aR.POST("/batchDelete", cont.BatchDelete)
 	}
 
+}
+
+func PaymentBind(rg *gin.RouterGroup) {
+	cont := &admin.Payment{}
+
+	// 套餐管理
+	planR := rg.Group("/subscription_plan").Use(middleware.AdminPrivilege())
+	{
+		planR.GET("/list", cont.PlanList)
+		planR.GET("/detail/:id", cont.PlanDetail)
+		planR.POST("/create", cont.PlanCreate)
+		planR.POST("/update", cont.PlanUpdate)
+		planR.POST("/delete", cont.PlanDelete)
+	}
+
+	// 订单管理
+	orderR := rg.Group("/order").Use(middleware.AdminPrivilege())
+	{
+		orderR.GET("/list", cont.OrderList)
+		orderR.GET("/detail/:id", cont.OrderDetail)
+		orderR.POST("/refund", cont.OrderRefund)
+	}
+
+	// 订阅管理
+	subR := rg.Group("/subscription").Use(middleware.AdminPrivilege())
+	{
+		subR.GET("/list", cont.SubscriptionList)
+		subR.POST("/grant", cont.SubscriptionGrant)
+		subR.POST("/cancel", cont.SubscriptionCancel)
+	}
 }

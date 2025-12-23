@@ -81,4 +81,15 @@ ldap:
     last-name: "sn"
     sync: false         # If true, the user will be synchronized to the database when the user logs in. If false, the user will be synchronized to the database when the user be created.
     admin-group: "cn=admin,dc=example,dc=com" # The group name of the admin group, if the user is in this group, the user will be an admin.
-    allow-group: "cn=users,dc=example,dc=com" # The group name of the users group, if the user is in this group, the user will be an login. 
+    allow-group: "cn=users,dc=example,dc=com" # The group name of the users group, if the user is in this group, the user will be an login.
+
+# 支付配置 (Linux.do EasyPay)
+payment:
+  epay:
+    enable: false                                          # 是否启用支付功能
+    base-url: "https://credit.linux.do/epay"               # 支付网关地址
+    pid: ""                                                # 商户ID (Client ID)
+    key: ""                                                # 商户密钥 (Client Secret)
+    notify-url: "https://your-domain.com/api/payment/notify"  # 异步回调地址
+    return-url: "https://your-domain.com/payment/result"   # 支付成功跳转地址
+    timeout: 15s                                           # 请求超时时间

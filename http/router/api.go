@@ -73,6 +73,12 @@ func ApiInit(g *gin.Engine) {
 		frg.POST("/audit/file", au.AuditFile)
 	}
 
+	// 支付回调(免鉴权)
+	{
+		pay := &api.Payment{}
+		frg.GET("/payment/notify", pay.Notify)
+	}
+
 	frg.Use(middleware.RustAuth())
 	{
 		u := &api.User{}
@@ -83,6 +89,18 @@ func ApiInit(g *gin.Engine) {
 		l := &api.Login{}
 		frg.POST("/logout", l.Logout)
 	}
+
+	// 订阅相关(需登录,但不需要订阅检查)
+	{
+		pay := &api.Payment{}
+		frg.GET("/subscription/plans", pay.Plans)
+		frg.POST("/subscription/orders", pay.CreateOrder)
+		frg.GET("/subscription/orders", pay.Orders)
+		frg.GET("/subscription/status", pay.Status)
+	}
+
+	// 以下路由需要订阅检查(启用支付功能时)
+	frg.Use(middleware.RequireSubscription())
 	{
 		gr := &api.Group{}
 		frg.GET("/users", gr.Users)

@@ -158,3 +158,54 @@ other = "Banned."
 description = "Register success, wait admin confirm."
 one = "Register success, wait admin confirm."
 other = "Register success, wait admin confirm."
+
+# Payment related
+[PaymentDisabled]
+description = "Payment disabled."
+one = "Payment feature is disabled."
+other = "Payment feature is disabled."
+
+[SubscriptionRequired]
+description = "Subscription required."
+one = "Please subscribe to use this service."
+other = "Please subscribe to use this service."
+
+[PlanNotFound]
+description = "Plan not found."
+one = "Plan not found."
+other = "Plan not found."
+
+[PlanDisabled]
+description = "Plan disabled."
+one = "Plan is disabled."
+other = "Plan is disabled."
+
+[PlanCodeExists]
+description = "Plan code exists."
+one = "Plan code already exists."
+other = "Plan code already exists."
+
+[OrderNotFound]
+description = "Order not found."
+one = "Order not found."
+other = "Order not found."
+
+[OrderNotPaid]
+description = "Order not paid."
+one = "Order not paid."
+other = "Order not paid."
+
+[SignVerifyFailed]
+description = "Sign verify failed."
+one = "Signature verification failed."
+other = "Signature verification failed."
+
+[AmountMismatch]
+description = "Amount mismatch."
+one = "Amount mismatch."
+other = "Amount mismatch."
+
+[TradeNoEmpty]
+description = "Trade no empty."
+one = "Trade number is empty."
+other = "Trade number is empty."

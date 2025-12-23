@@ -160,3 +160,54 @@ other = "已被封禁。"
 description = "Register success, wait for admin confirm."
 one = "注册成功，请等待管理员审核。"
 other = "注册成功，请等待管理员审核。"
+
+# 支付相关
+[PaymentDisabled]
+description = "Payment disabled."
+one = "支付功能未启用。"
+other = "支付功能未启用。"
+
+[SubscriptionRequired]
+description = "Subscription required."
+one = "请先订阅后使用。"
+other = "请先订阅后使用。"
+
+[PlanNotFound]
+description = "Plan not found."
+one = "套餐不存在。"
+other = "套餐不存在。"
+
+[PlanDisabled]
+description = "Plan disabled."
+one = "套餐已禁用。"
+other = "套餐已禁用。"
+
+[PlanCodeExists]
+description = "Plan code exists."
+one = "套餐编码已存在。"
+other = "套餐编码已存在。"
+
+[OrderNotFound]
+description = "Order not found."
+one = "订单不存在。"
+other = "订单不存在。"
+
+[OrderNotPaid]
+description = "Order not paid."
+one = "订单未支付。"
+other = "订单未支付。"
+
+[SignVerifyFailed]
+description = "Sign verify failed."
+one = "签名验证失败。"
+other = "签名验证失败。"
+
+[AmountMismatch]
+description = "Amount mismatch."
+one = "金额不匹配。"
+other = "金额不匹配。"
+
+[TradeNoEmpty]
+description = "Trade no empty."
+one = "平台订单号为空。"
+other = "平台订单号为空。"

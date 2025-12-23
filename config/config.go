@@ -47,6 +47,7 @@ type Config struct {
 	Rustdesk   Rustdesk
 	Proxy      Proxy
 	Ldap       Ldap
+	Payment    Payment
 }
 
 func (a *Admin) Init() {

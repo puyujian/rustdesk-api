@@ -24,6 +24,8 @@ type Service struct {
 	*ServerCmdService
 	*LdapService
 	*AppService
+	*PaymentService
+	*SubscriptionService
 }
 
 type Dependencies struct {
