@@ -86,10 +86,10 @@ ldap:
 # 支付配置 (Linux.do EasyPay)
 payment:
   epay:
-    enable: false                                          # 是否启用支付功能
+    enable: true                                           # 是否启用支付功能
     base-url: "https://credit.linux.do/epay"               # 支付网关地址
-    pid: ""                                                # 商户ID (Client ID)
-    key: ""                                                # 商户密钥 (Client Secret)
-    notify-url: "https://your-domain.com/api/payment/notify"  # 异步回调地址
-    return-url: "https://your-domain.com/payment/result"   # 支付成功跳转地址
+    pid: "94fb7c3a4275f202cda13a329174c5b50cef8c4b50d82c53ab0d27d08a051f1e"  # 商户ID (Client ID)
+    key: "16083d698f4d435f8835e033f5b3218b341e5dd7d52dadb2a601e7f1c39186d3"  # 商户密钥 (Client Secret)
+    notify-url: "http://127.0.0.1:21114/api/payment/notify"  # 异步回调地址
+    return-url: "http://127.0.0.1:8888/#/my/subscription"  # 支付成功跳转地址
     timeout: 15s                                           # 请求超时时间

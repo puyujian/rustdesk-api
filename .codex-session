@@ -1,0 +1,17 @@
+{
+  "session_id": "ai-1766577563-73888",
+  "runtime_dir": "C:\\Users\\60350\\AppData\\Local\\Temp\\claude-ai-60350\\ai-1766577563-73888\\codex",
+  "input_fifo": "C:\\Users\\60350\\AppData\\Local\\Temp\\claude-ai-60350\\ai-1766577563-73888\\codex\\input.fifo",
+  "output_fifo": "C:\\Users\\60350\\AppData\\Local\\Temp\\claude-ai-60350\\ai-1766577563-73888\\codex\\output.fifo",
+  "terminal": "wezterm",
+  "tmux_session": null,
+  "pane_id": "1",
+  "tmux_log": "C:\\Users\\60350\\AppData\\Local\\Temp\\claude-ai-60350\\ai-1766577563-73888\\codex\\bridge_output.log",
+  "work_dir": "D:\\代码\\rustdesk-api",
+  "work_dir_norm": "d:/代码/rustdesk-api",
+  "active": true,
+  "started_at": "2025-12-24 19:59:23",
+  "codex_session_path": "C:\\Users\\60350\\.codex\\sessions\\2025\\12\\24\\rollout-2025-12-24T19-08-53-019b500c-2cf8-76b0-9727-d050a1aad8da.jsonl",
+  "codex_session_id": "019b500c-2cf8-76b0-9727-d050a1aad8da",
+  "codex_start_cmd": "codex resume 019b500c-2cf8-76b0-9727-d050a1aad8da"
+}

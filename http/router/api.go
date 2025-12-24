@@ -77,6 +77,7 @@ func ApiInit(g *gin.Engine) {
 	{
 		pay := &api.Payment{}
 		frg.GET("/payment/notify", pay.Notify)
+		frg.GET("/payment/submit", pay.Submit)
 	}
 
 	frg.Use(middleware.RustAuth())

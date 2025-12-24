@@ -85,6 +85,44 @@ func (ss *SubscriptionService) CreateOrder(userId, planId uint) (outTradeNo, pay
 		return "", "", errors.New("PlanDisabled")
 	}
 
+	// 免费套餐：直接创建已支付订单并激活订阅
+	if plan.Price == 0 {
+		outTradeNo = ss.GenerateOutTradeNo(userId)
+		amountYuan := model.FenToYuan(plan.Price)
+		now := time.Now().Unix()
+
+		err = DB.Transaction(func(tx *gorm.DB) error {
+			order := &model.Order{
+				UserId:     userId,
+				PlanId:     planId,
+				OutTradeNo: outTradeNo,
+				Subject:    plan.Name,
+				Amount:     plan.Price,
+				AmountYuan: amountYuan,
+				Status:     model.OrderStatusPaid,
+				PaidAt:     now,
+			}
+			if err := tx.Create(order).Error; err != nil {
+				Logger.Error("Create free order failed: ", err)
+				return err
+			}
+			return ss.activateOrExtendSubscription(tx, order.UserId, order.PlanId, order.Id, now)
+		})
+		if err != nil {
+			return "", "", err
+		}
+		return outTradeNo, "", nil
+	}
+
+	// 复用同一套餐的最新待支付订单，避免重复创建
+	existing := &model.Order{}
+	if err := DB.Where("user_id = ? AND plan_id = ? AND status = ?", userId, planId, model.OrderStatusPending).
+		Order("id DESC").
+		First(existing).Error; err == nil && existing.Id != 0 {
+		payURL = AllService.PaymentService.BuildPayURL(existing.OutTradeNo)
+		return existing.OutTradeNo, payURL, nil
+	}
+
 	// 2. 生成订单号
 	outTradeNo = ss.GenerateOutTradeNo(userId)
 	amountYuan := model.FenToYuan(plan.Price)
@@ -105,7 +143,7 @@ func (ss *SubscriptionService) CreateOrder(userId, planId uint) (outTradeNo, pay
 	}
 
 	// 4. 构建支付URL
-	payURL = AllService.PaymentService.BuildPayURL(outTradeNo, plan.Name, amountYuan)
+	payURL = AllService.PaymentService.BuildPayURL(outTradeNo)
 
 	return outTradeNo, payURL, nil
 }
@@ -166,8 +204,9 @@ func (ss *SubscriptionService) HandleNotify(params map[string]string) error {
 	}
 
 	// 3. 校验pid是否匹配
-	if pid != "" && pid != Config.Payment.EasyPay.Pid {
-		Logger.Warn("Payment notify pid mismatch, out_trade_no: ", outTradeNo, " expected: ", Config.Payment.EasyPay.Pid, " got: ", pid)
+	cfg := AllService.PaymentService.GetConfig()
+	if pid != "" && pid != cfg.Pid {
+		Logger.Warn("Payment notify pid mismatch, out_trade_no: ", outTradeNo, " expected: ", cfg.Pid, " got: ", pid)
 		return errors.New("PidMismatch")
 	}
 
@@ -311,6 +350,13 @@ func (ss *SubscriptionService) calcExpireTime(baseTime int64, periodUnit string,
 func (ss *SubscriptionService) GetUserSubscription(userId uint) *model.UserSubscription {
 	sub := &model.UserSubscription{}
 	DB.Where("user_id = ?", userId).Preload("Plan").First(sub)
+	return sub
+}
+
+// GetSubscriptionById 获取订阅详情(管理员)
+func (ss *SubscriptionService) GetSubscriptionById(id uint) *model.UserSubscription {
+	sub := &model.UserSubscription{}
+	DB.Where("id = ?", id).Preload("User").Preload("Plan").Preload("LastOrder").First(sub)
 	return sub
 }
 

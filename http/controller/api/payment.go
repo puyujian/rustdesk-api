@@ -1,9 +1,15 @@
 package api
 
 import (
+	"html"
+	"sort"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/lejianwen/rustdesk-api/v2/http/response"
+	"github.com/lejianwen/rustdesk-api/v2/model"
 	"github.com/lejianwen/rustdesk-api/v2/service"
+	"gorm.io/gorm"
 )
 
 type Payment struct{}
@@ -51,6 +57,74 @@ func (p *Payment) Notify(c *gin.Context) {
 
 	// 返回成功(必须返回"success"字符串)
 	c.String(200, "success")
+}
+
+// Submit 支付中转页(免鉴权)
+// @Tags Payment
+// @Summary 支付中转页
+// @Description 生成自动提交表单，以 POST 方式提交到 EasyPay 网关
+// @Produce  html
+// @Param out_trade_no query string true "业务订单号"
+// @Success 200 {string} string "HTML"
+// @Router /api/payment/submit [get]
+func (p *Payment) Submit(c *gin.Context) {
+	if !service.AllService.PaymentService.IsEnabled() {
+		c.String(200, "支付未启用")
+		return
+	}
+
+	outTradeNo := strings.TrimSpace(c.Query("out_trade_no"))
+	if outTradeNo == "" {
+		c.String(400, "缺少 out_trade_no")
+		return
+	}
+
+	order := service.AllService.SubscriptionService.GetOrderByOutTradeNo(outTradeNo)
+	if order == nil || order.Id == 0 {
+		c.String(404, "订单不存在")
+		return
+	}
+	if order.Status != model.OrderStatusPending {
+		c.String(200, "订单状态不可支付")
+		return
+	}
+	if order.Amount <= 0 || strings.TrimSpace(order.AmountYuan) == "" {
+		c.String(200, "订单金额不合法")
+		return
+	}
+
+	action := service.AllService.PaymentService.PaySubmitURL()
+	params := service.AllService.PaymentService.BuildPayParams(order.OutTradeNo, order.Subject, order.AmountYuan)
+
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.Header("Cache-Control", "no-store")
+	c.String(200, buildAutoSubmitHTML(action, params))
+}
+
+func buildAutoSubmitHTML(action string, params map[string]string) string {
+	keys := make([]string, 0, len(params))
+	for k := range params {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var b strings.Builder
+	b.WriteString("<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>正在跳转到支付...</title></head><body>")
+	b.WriteString("<form id=\"pay-form\" method=\"post\" action=\"")
+	b.WriteString(html.EscapeString(action))
+	b.WriteString("\">")
+	for _, k := range keys {
+		b.WriteString("<input type=\"hidden\" name=\"")
+		b.WriteString(html.EscapeString(k))
+		b.WriteString("\" value=\"")
+		b.WriteString(html.EscapeString(params[k]))
+		b.WriteString("\">")
+	}
+	b.WriteString("</form>")
+	b.WriteString("<noscript>请启用 JavaScript 后继续。<button type=\"submit\" form=\"pay-form\">继续</button></noscript>")
+	b.WriteString("<script>document.getElementById('pay-form').submit();</script>")
+	b.WriteString("</body></html>")
+	return b.String()
 }
 
 // Plans 获取套餐列表
@@ -176,7 +250,23 @@ func (p *Payment) Orders(c *gin.Context) {
 		req.PageSize = 100
 	}
 
-	orders := service.AllService.SubscriptionService.ListUserOrders(user.Id, uint(req.Page), uint(req.PageSize))
+	orders := service.AllService.SubscriptionService.ListOrders(uint(req.Page), uint(req.PageSize), func(tx *gorm.DB) {
+		tx.Where("user_id = ?", user.Id)
+		if req.Status != nil {
+			tx.Where("status = ?", *req.Status)
+		}
+	})
+	// 仅对待支付订单补充 pay_url，便于前端“立即支付”直接跳转，避免重复创建订单
+	if service.AllService.PaymentService.IsEnabled() {
+		for _, order := range orders.Orders {
+			if order == nil {
+				continue
+			}
+			if order.Status == model.OrderStatusPending && order.Amount > 0 {
+				order.PayURL = service.AllService.PaymentService.BuildPayURL(order.OutTradeNo)
+			}
+		}
+	}
 	response.Success(c, orders)
 }
 
@@ -186,6 +276,7 @@ type CreateOrderRequest struct {
 }
 
 type PageRequest struct {
-	Page     int `form:"page" json:"page"`
-	PageSize int `form:"page_size" json:"page_size"`
+	Page     int  `form:"page" json:"page"`
+	PageSize int  `form:"page_size" json:"page_size"`
+	Status   *int `form:"status" json:"status"`
 }

@@ -349,7 +349,16 @@ func PaymentBind(rg *gin.RouterGroup) {
 	subR := rg.Group("/subscription").Use(middleware.AdminPrivilege())
 	{
 		subR.GET("/list", cont.SubscriptionList)
+		subR.GET("/detail/:id", cont.SubscriptionDetail)
 		subR.POST("/grant", cont.SubscriptionGrant)
 		subR.POST("/cancel", cont.SubscriptionCancel)
+	}
+
+	// 支付配置
+	payR := rg.Group("/payment").Use(middleware.AdminPrivilege())
+	{
+		payR.GET("/config", cont.ConfigGet)
+		payR.GET("/config/full", cont.ConfigGetFull)
+		payR.POST("/config", cont.ConfigSave)
 	}
 }

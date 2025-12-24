@@ -1,0 +1,27 @@
+services:
+  rustdesk-api-s6:
+    build:
+      context: .
+      dockerfile: Dockerfile_full_s6.dev
+      args:
+        COUNTRY: CN
+        FRONTEND_GIT_REPO: https://github.com/puyujian/rustdesk-api-web.git
+        FRONTEND_GIT_BRANCH: master
+    container_name: rustdesk-api-s6
+    environment:
+      - TZ=Asia/Shanghai
+      - RELAY=192.168.1.66
+      - ENCRYPTED_ONLY=0
+    ports:
+      - 21114:21114
+      - 21115:21115
+      - 21116:21116
+      - 21116:21116/udp
+      - 21117:21117
+      - 21118:21118
+      - 21119:21119
+    volumes:
+      - ./data:/data
+      - ./data/rustdesk/api:/app/data
+      - ./conf:/app/conf
+    restart: unless-stopped

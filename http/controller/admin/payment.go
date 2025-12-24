@@ -2,6 +2,7 @@ package admin
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/lejianwen/rustdesk-api/v2/global"
@@ -315,6 +316,29 @@ func (p *Payment) SubscriptionList(c *gin.Context) {
 	response.Success(c, subs)
 }
 
+// SubscriptionDetail 订阅详情
+// @Tags Admin-Payment
+// @Summary 获取订阅详情
+// @Description 根据ID获取订阅详情
+// @Accept  json
+// @Produce  json
+// @Param id path int true "订阅ID"
+// @Success 200 {object} response.Response
+// @Router /api/admin/subscription/detail/{id} [get]
+func (p *Payment) SubscriptionDetail(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	if id <= 0 {
+		response.Fail(c, 101, response.TranslateMsg(c, "ParamsError"))
+		return
+	}
+	sub := service.AllService.SubscriptionService.GetSubscriptionById(uint(id))
+	if sub.Id == 0 {
+		response.Fail(c, 101, response.TranslateMsg(c, "ItemNotFound"))
+		return
+	}
+	response.Success(c, sub)
+}
+
 // SubscriptionGrant 赠送订阅
 // @Tags Admin-Payment
 // @Summary 赠送订阅时长
@@ -370,10 +394,10 @@ type PlanForm struct {
 	Code        string `json:"code" validate:"required"`
 	Name        string `json:"name" validate:"required"`
 	Description string `json:"description"`
-	Price       int64  `json:"price" validate:"required,gt=0"`
+	Price       int64  `json:"price" validate:"gte=0"`
 	PeriodUnit  string `json:"period_unit" validate:"required,oneof=day month year"`
-	PeriodCount int    `json:"period_count" validate:"required,gt=0"`
-	Status      int    `json:"status" validate:"required,oneof=1 2"`
+	PeriodCount int    `json:"period_count" validate:"gt=0"`
+	Status      int    `json:"status" validate:"oneof=1 2"`
 	SortOrder   int    `json:"sort_order"`
 }
 
@@ -394,4 +418,106 @@ type GrantForm struct {
 	UserId uint `json:"user_id" validate:"required"`
 	PlanId uint `json:"plan_id" validate:"required"`
 	Days   int  `json:"days" validate:"required,gt=0"`
+}
+
+// ========== 支付配置管理 ==========
+
+// PaymentConfigForm 支付配置表单
+type PaymentConfigForm struct {
+	Enable    bool   `json:"enable"`
+	BaseURL   string `json:"base_url"`
+	Pid       string `json:"pid"`
+	Key       string `json:"key"`
+	NotifyURL string `json:"notify_url"`
+	ReturnURL string `json:"return_url"`
+	Timeout   int    `json:"timeout"`
+}
+
+// ConfigGet 获取支付配置
+// @Tags Admin-Payment
+// @Summary 获取支付配置
+// @Description 获取当前支付配置信息
+// @Accept  json
+// @Produce  json
+// @Success 200 {object} response.Response
+// @Router /api/admin/payment/config [get]
+func (p *Payment) ConfigGet(c *gin.Context) {
+	cfg := service.AllService.PaymentService.GetConfig()
+	// 隐藏敏感信息的部分字符
+	maskedCfg := &model.PaymentConfig{
+		Enable:    cfg.Enable,
+		BaseURL:   cfg.BaseURL,
+		Pid:       maskString(cfg.Pid),
+		Key:       maskString(cfg.Key),
+		NotifyURL: cfg.NotifyURL,
+		ReturnURL: cfg.ReturnURL,
+		Timeout:   cfg.Timeout,
+	}
+	response.Success(c, maskedCfg)
+}
+
+// ConfigGetFull 获取完整支付配置（包含敏感信息）
+// @Tags Admin-Payment
+// @Summary 获取完整支付配置
+// @Description 获取完整支付配置信息（包含密钥）
+// @Accept  json
+// @Produce  json
+// @Success 200 {object} response.Response
+// @Router /api/admin/payment/config/full [get]
+func (p *Payment) ConfigGetFull(c *gin.Context) {
+	cfg := service.AllService.PaymentService.GetConfig()
+	response.Success(c, cfg)
+}
+
+// ConfigSave 保存支付配置
+// @Tags Admin-Payment
+// @Summary 保存支付配置
+// @Description 保存支付配置信息
+// @Accept  json
+// @Produce  json
+// @Param body body PaymentConfigForm true "支付配置"
+// @Success 200 {object} response.Response
+// @Router /api/admin/payment/config [post]
+func (p *Payment) ConfigSave(c *gin.Context) {
+	var form PaymentConfigForm
+	if err := c.ShouldBindJSON(&form); err != nil {
+		response.Fail(c, 101, response.TranslateMsg(c, "ParamsError")+err.Error())
+		return
+	}
+
+	// 避免前端拿到脱敏后的 pid/key 直接保存，导致覆盖真实密钥
+	current := service.AllService.PaymentService.GetConfig()
+	pid := strings.TrimSpace(form.Pid)
+	key := strings.TrimSpace(form.Key)
+	if pid == "" || pid == maskString(current.Pid) || strings.Contains(pid, "*") {
+		pid = current.Pid
+	}
+	if key == "" || key == maskString(current.Key) || strings.Contains(key, "*") {
+		key = current.Key
+	}
+
+	cfg := &model.PaymentConfig{
+		Enable:    form.Enable,
+		BaseURL:   form.BaseURL,
+		Pid:       pid,
+		Key:       key,
+		NotifyURL: form.NotifyURL,
+		ReturnURL: form.ReturnURL,
+		Timeout:   form.Timeout,
+	}
+
+	if err := service.AllService.SystemSettingService.SetPaymentConfig(cfg); err != nil {
+		response.Fail(c, 101, err.Error())
+		return
+	}
+
+	response.Success(c, nil)
+}
+
+// maskString 遮蔽字符串中间部分
+func maskString(s string) string {
+	if len(s) <= 8 {
+		return "****"
+	}
+	return s[:4] + "****" + s[len(s)-4:]
 }

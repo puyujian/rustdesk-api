@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/lejianwen/rustdesk-api/v2/model"
 )
 
 type PaymentService struct{}
@@ -37,9 +39,16 @@ type EpayRefundResp struct {
 	Msg  string `json:"msg"`
 }
 
+// getConfig 获取支付配置（优先从数据库读取）
+func (ps *PaymentService) getConfig() *model.PaymentConfig {
+	return AllService.SystemSettingService.GetPaymentConfig()
+}
+
 // Sign 生成签名
 // 按 EasyPay 协议: 非空字段(排除sign/sign_type) -> ASCII升序 -> k1=v1&k2=v2 -> 末尾追加secret -> MD5小写
 func (ps *PaymentService) Sign(params map[string]string) string {
+	cfg := ps.getConfig()
+
 	// 1. 过滤空值和sign/sign_type
 	filtered := make(map[string]string)
 	for k, v := range params {
@@ -64,7 +73,7 @@ func (ps *PaymentService) Sign(params map[string]string) string {
 	str := strings.Join(pairs, "&")
 
 	// 4. 末尾追加secret
-	str += Config.Payment.EasyPay.Key
+	str += cfg.Key
 
 	// 5. MD5小写
 	hash := md5.Sum([]byte(str))
@@ -81,9 +90,15 @@ func (ps *PaymentService) Verify(params map[string]string) bool {
 	return subtle.ConstantTimeCompare([]byte(strings.ToLower(got)), []byte(strings.ToLower(expected))) == 1
 }
 
-// BuildPayURL 构建支付跳转URL
-func (ps *PaymentService) BuildPayURL(outTradeNo, subject, moneyYuan string) string {
-	cfg := Config.Payment.EasyPay
+// PaySubmitURL 获取 EasyPay 提交地址
+func (ps *PaymentService) PaySubmitURL() string {
+	cfg := ps.getConfig()
+	return strings.TrimRight(cfg.BaseURL, "/") + "/pay/submit.php"
+}
+
+// BuildPayParams 构建提交到 EasyPay 的表单参数
+func (ps *PaymentService) BuildPayParams(outTradeNo, subject, moneyYuan string) map[string]string {
+	cfg := ps.getConfig()
 
 	params := map[string]string{
 		"pid":          cfg.Pid,
@@ -91,27 +106,32 @@ func (ps *PaymentService) BuildPayURL(outTradeNo, subject, moneyYuan string) str
 		"out_trade_no": outTradeNo,
 		"name":         subject,
 		"money":        moneyYuan,
-		"notify_url":   cfg.NotifyURL,
-		"return_url":   cfg.ReturnURL,
 		"sign_type":    "MD5",
+	}
+	if cfg.NotifyURL != "" {
+		params["notify_url"] = cfg.NotifyURL
+	}
+	if cfg.ReturnURL != "" {
+		params["return_url"] = cfg.ReturnURL
 	}
 
 	// 生成签名
 	sign := ps.Sign(params)
 	params["sign"] = sign
 
-	// 构建URL
-	q := url.Values{}
-	for k, v := range params {
-		q.Set(k, v)
-	}
+	return params
+}
 
-	return cfg.BaseURL + "/pay/submit.php?" + q.Encode()
+// BuildPayURL 构建支付跳转URL（返回本服务的中转页面，用于以 POST 方式提交到网关）
+func (ps *PaymentService) BuildPayURL(outTradeNo string) string {
+	q := url.Values{}
+	q.Set("out_trade_no", outTradeNo)
+	return "/api/payment/submit?" + q.Encode()
 }
 
 // Query 查询订单状态
 func (ps *PaymentService) Query(outTradeNo string) (*EpayQueryResp, error) {
-	cfg := Config.Payment.EasyPay
+	cfg := ps.getConfig()
 
 	q := url.Values{}
 	q.Set("act", "order")
@@ -146,7 +166,7 @@ func (ps *PaymentService) Query(outTradeNo string) (*EpayQueryResp, error) {
 
 // Refund 发起退款
 func (ps *PaymentService) Refund(tradeNo, moneyYuan string) (*EpayRefundResp, error) {
-	cfg := Config.Payment.EasyPay
+	cfg := ps.getConfig()
 
 	data := url.Values{}
 	data.Set("pid", cfg.Pid)
@@ -185,7 +205,8 @@ func (ps *PaymentService) Refund(tradeNo, moneyYuan string) (*EpayRefundResp, er
 
 // getHTTPClient 获取HTTP客户端(复用代理配置)
 func (ps *PaymentService) getHTTPClient() *http.Client {
-	timeout := Config.Payment.EasyPay.Timeout
+	cfg := ps.getConfig()
+	timeout := time.Duration(cfg.Timeout) * time.Second
 	if timeout == 0 {
 		timeout = 15 * time.Second
 	}
@@ -210,5 +231,11 @@ func (ps *PaymentService) getHTTPClient() *http.Client {
 
 // IsEnabled 检查支付功能是否启用
 func (ps *PaymentService) IsEnabled() bool {
-	return Config.Payment.EasyPay.Enable
+	cfg := ps.getConfig()
+	return cfg.Enable
+}
+
+// GetConfig 获取支付配置（公开方法，用于API返回）
+func (ps *PaymentService) GetConfig() *model.PaymentConfig {
+	return ps.getConfig()
 }

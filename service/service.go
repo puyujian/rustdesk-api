@@ -26,6 +26,7 @@ type Service struct {
 	*AppService
 	*PaymentService
 	*SubscriptionService
+	*SystemSettingService
 }
 
 type Dependencies struct {
@@ -50,7 +51,11 @@ func New(c *config.Config, g *gorm.DB, l *log.Logger, j *jwt.Jwt, lo lock.Locker
 	Logger = l
 	Jwt = j
 	Lock = lo
-	AllService = new(Service)
+	AllService = &Service{
+		SystemSettingService: &SystemSettingService{
+			cache: make(map[string]*cacheItem),
+		},
+	}
 	return AllService
 }
 

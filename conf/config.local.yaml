@@ -1,0 +1,101 @@
+lang: "zh-CN"
+app:
+  web-client: 1 # 1:启用 0:禁用
+  register: false # 是否开启注册
+  register-status: 1 # 注册用户默认状态 1:启用 2:禁用
+  captcha-threshold: 3 # <0:disabled, 0 always, >0:enabled
+  ban-threshold: 0 # 0:disabled, >0:enabled
+  show-swagger: 0 # 1:启用 0:禁用
+  token-expire: 168h
+  web-sso: true # web auth sso
+  disable-pwd-login: false # 禁用密码登录
+
+admin:
+  title: "RustDesk API Admin"
+  hello-file: "./conf/admin/hello.html"
+  hello: ""
+  id-server-port: 21116
+  relay-server-port: 21117
+
+gin:
+  api-addr: "0.0.0.0:21115"
+  mode: "release" # release,debug,test
+  resources-path: "resources"
+  trust-proxy: ""
+
+gorm:
+  type: "sqlite"
+  max-idle-conns: 10
+  max-open-conns: 100
+
+mysql:
+  username: ""
+  password: ""
+  addr: ""
+  dbname: ""
+  tls: "false" # true / false / skip-verify / custom
+
+postgresql:
+  host: "127.0.0.1"
+  port: "5432"
+  user: ""
+  password: ""
+  dbname: "postgres"
+  sslmode: "disable"
+  time-zone: "Asia/Shanghai"
+
+rustdesk:
+  id-server: "127.0.0.1:21116"
+  relay-server: "127.0.0.1:21117"
+  api-server: "http://127.0.0.1:21115"
+  key: ""
+  key-file: "/data/id_ed25519.pub"
+  personal: 1
+  webclient-magic-queryonline: 0
+  ws-host: ""
+
+logger:
+  path: "./runtime/log.txt"
+  level: "info"
+  report-caller: true
+
+proxy:
+  enable: false
+  host: "http://127.0.0.1:1080"
+
+jwt:
+  key: ""
+  expire-duration: 168h
+
+ldap:
+  enable: false
+  url: "ldap://ldap.example.com:389"
+  tls-ca-file: ""
+  tls-verify: false
+  base-dn: "dc=example,dc=com"
+  bind-dn: "cn=admin,dc=example,dc=com"
+  bind-password: "password"
+  user:
+    base-dn: "ou=users,dc=example,dc=com"
+    enable-attr: ""
+    enable-attr-value: ""
+    filter: "(cn=*)"
+    username: "uid"
+    email: "mail"
+    first-name: "givenName"
+    last-name: "sn"
+    sync: false
+    admin-group: "cn=admin,dc=example,dc=com"
+    allow-group: "cn=users,dc=example,dc=com"
+
+# 支付配置（本地测试用占位符，避免把真实密钥写入本地配置）
+payment:
+  epay:
+    enable: true
+    base-url: "https://example.com/epay"
+    pid: "test_pid"
+    key: "test_key"
+    notify-url: "http://127.0.0.1:21115/api/payment/notify"
+    return-url: "http://127.0.0.1:8888/#/my/subscription"
+    timeout: 15s
+

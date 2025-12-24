@@ -1,0 +1,100 @@
+# Stage 1: Backend Build (Alpine-based for musl compatibility)
+ARG GO_VERSION=1.23
+FROM golang:${GO_VERSION}-alpine AS builder-backend
+
+# Install build dependencies for CGO
+RUN apk add --no-cache gcc musl-dev sqlite-dev
+
+WORKDIR /app
+COPY . .
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod tidy && go mod download && go install github.com/swaggo/swag/cmd/swag@latest
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    swag init -g cmd/apimain.go --output docs/api --instanceName api --exclude http/controller/admin && \
+    swag init -g cmd/apimain.go --output docs/admin --instanceName admin --exclude http/controller/api
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=1 GOOS=linux go build -a \
+    -ldflags "-s -w -extldflags '-static'" \
+    -tags "sqlite_omit_load_extension" \
+    -o release/apimain cmd/apimain.go
+
+# Stage 2: Frontend Build
+FROM node:18-alpine AS builder-admin-frontend
+
+WORKDIR /frontend
+
+ARG COUNTRY
+RUN if [ "$COUNTRY" = "CN" ] ; then \
+        sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories; \
+    fi && \
+    apk update && apk add --no-cache git
+
+ARG FRONTEND_GIT_REPO=https://github.com/puyujian/rustdesk-api-web.git
+ARG FRONTEND_GIT_BRANCH=master
+
+RUN git clone -b $FRONTEND_GIT_BRANCH $FRONTEND_GIT_REPO .
+
+RUN if [ "$COUNTRY" = "CN" ] ; then \
+        export NPM_CONFIG_REGISTRY="https://mirrors.huaweicloud.com/repository/npm/"; \
+    fi && \
+    npm install && npm run build
+
+# Stage 3: Final S6 Image
+FROM lejianwen/rustdesk-server-s6:latest AS server
+
+FROM alpine:latest
+
+WORKDIR /app
+
+ARG COUNTRY
+RUN if [ "$COUNTRY" = "CN" ] ; then \
+        sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories; \
+    fi && \
+    apk update && apk add --no-cache tzdata
+
+# Copy backend build
+COPY --from=builder-backend /app/release/apimain /app/apimain
+COPY --from=builder-backend /app/conf /app/conf/
+COPY --from=builder-backend /app/resources /app/resources/
+COPY --from=builder-backend /app/docs /app/docs/
+
+# Copy frontend build
+COPY --from=builder-admin-frontend /frontend/dist/ /app/resources/admin/
+
+# Copy s6-overlay and rustdesk-server from server image
+COPY --from=server /init /init
+COPY --from=server /etc/s6-overlay /etc/s6-overlay
+COPY --from=server /package /package
+COPY --from=server /usr/bin/healthcheck.sh /usr/bin/healthcheck.sh
+COPY --from=server /usr/bin/hbbr /usr/bin/hbbr
+COPY --from=server /usr/bin/hbbs /usr/bin/hbbs
+COPY --from=server /usr/bin/rustdesk-utils /usr/bin/rustdesk-utils
+COPY --from=server /command /command
+
+# Setup s6 service for API
+RUN \
+  mkdir -p /etc/s6-overlay/s6-rc.d/api && \
+  echo -e "key-secret\nhbbs" > /etc/s6-overlay/s6-rc.d/api/dependencies && \
+  echo "longrun" > /etc/s6-overlay/s6-rc.d/api/type && \
+  echo -e "#!/command/with-contenv sh\ncd /app\nexec ./apimain" > /etc/s6-overlay/s6-rc.d/api/run && \
+  chmod +x /etc/s6-overlay/s6-rc.d/api/run && \
+  chmod +x /app/apimain && \
+  touch /etc/s6-overlay/s6-rc.d/user/contents.d/api && \
+  echo "/package/admin/s6/command/s6-svstat /run/s6-rc/servicedirs/api || exit 1" >> /usr/bin/healthcheck.sh && \
+  ln -s /run /var/run && \
+  mkdir -p /app/data && \
+  mkdir -p /app/runtime && \
+  mkdir -p /data
+
+ENV RELAY=relay.example.com
+ENV ENCRYPTED_ONLY=0
+
+VOLUME /data
+VOLUME /app/data
+
+EXPOSE 21114 21115 21116 21116/udp 21117 21118 21119
+
+ENTRYPOINT ["/init"]
