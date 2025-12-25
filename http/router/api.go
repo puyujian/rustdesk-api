@@ -119,6 +119,10 @@ func ApiInit(g *gin.Engine) {
 	}
 
 	PersonalRoutes(frg)
+
+	// 内部接口组 (供 hbbs/hbbr 调用，需要内部鉴权)
+	InternalRoutes(g)
+
 	//访问静态文件
 	g.StaticFS("/upload", http.Dir(global.Config.Gin.ResourcesPath+"/public/upload"))
 }
@@ -164,4 +168,21 @@ func WebClientRoutes(frg *gin.RouterGroup) {
 		frg.POST("/server-config-v2", middleware.RustAuth(), w.ServerConfigV2)
 	}
 
+}
+
+// InternalRoutes 内部接口路由
+// 供 hbbs/hbbr 调用，使用内部鉴权中间件
+func InternalRoutes(g *gin.Engine) {
+	internal := g.Group("/api/internal")
+	internal.Use(middleware.InternalAuth())
+	{
+		i := &api.Internal{}
+		// Relay 白名单管理
+		internal.POST("/relay/allow", i.RelayAllow)
+		internal.POST("/relay/consume", i.RelayConsume)
+		internal.GET("/relay/stats", i.RelayStats)
+		// 订阅状态检查 (支持 GET 和 POST，推荐 POST 以避免 token 泄露)
+		internal.GET("/subscription/check", i.SubscriptionCheck)
+		internal.POST("/subscription/check", i.SubscriptionCheck)
+	}
 }

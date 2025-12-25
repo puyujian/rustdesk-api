@@ -43,7 +43,7 @@ RUN if [ "$COUNTRY" = "CN" ] ; then \
     npm install && npm run build
 
 # Stage 3: Final S6 Image
-FROM lejianwen/rustdesk-server-s6:latest AS server
+FROM ghcr.io/puyujian/rustdesk-server-s6:latest AS server
 
 FROM alpine:latest
 
