@@ -6,3 +6,5 @@ go.sum
 resources/admin
 release
 data/rustdeskapi.db
+rustdesk-server
+rustdesk-api-web

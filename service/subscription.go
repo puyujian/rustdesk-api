@@ -415,9 +415,10 @@ func (ss *SubscriptionService) RefundOrder(orderId uint, reason string) error {
 		return err
 	}
 
-	// 取消用户订阅(简单处理:直接标记取消)
+	// 取消用户订阅(标记取消并立即过期)
 	DB.Model(&model.UserSubscription{}).Where("user_id = ?", order.UserId).Updates(map[string]interface{}{
-		"status": model.SubscriptionStatusCanceled,
+		"status":    model.SubscriptionStatusCanceled,
+		"expire_at": now,
 	})
 
 	Logger.Info("Refund order success, order: ", order.OutTradeNo, " reason: ", reason)
@@ -462,8 +463,10 @@ func (ss *SubscriptionService) GrantSubscription(userId, planId uint, days int) 
 
 // CancelSubscription 管理员取消订阅
 func (ss *SubscriptionService) CancelSubscription(userId uint) error {
+	now := time.Now().Unix()
 	return DB.Model(&model.UserSubscription{}).Where("user_id = ?", userId).Updates(map[string]interface{}{
-		"status": model.SubscriptionStatusCanceled,
+		"status":    model.SubscriptionStatusCanceled,
+		"expire_at": now,
 	}).Error
 }
 
