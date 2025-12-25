@@ -470,6 +470,19 @@ func (ss *SubscriptionService) CancelSubscription(userId uint) error {
 	}).Error
 }
 
+// CloseOrder 关闭待支付订单
+func (ss *SubscriptionService) CloseOrder(orderId uint) error {
+	order := ss.GetOrderById(orderId)
+	if order.Id == 0 {
+		return errors.New("OrderNotFound")
+	}
+	if order.Status != model.OrderStatusPending {
+		return errors.New("OrderCannotClose")
+	}
+
+	return DB.Model(order).Update("status", model.OrderStatusClosed).Error
+}
+
 // ========== 辅助函数 ==========
 
 // ParseMoneyToFen 解析金额字符串为分(使用字符串严格解析,避免浮点精度问题)

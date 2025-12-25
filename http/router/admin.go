@@ -343,6 +343,7 @@ func PaymentBind(rg *gin.RouterGroup) {
 		orderR.GET("/list", cont.OrderList)
 		orderR.GET("/detail/:id", cont.OrderDetail)
 		orderR.POST("/refund", cont.OrderRefund)
+		orderR.POST("/close", cont.OrderClose)
 	}
 
 	// 订阅管理

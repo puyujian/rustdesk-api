@@ -276,6 +276,30 @@ func (p *Payment) OrderRefund(c *gin.Context) {
 	response.Success(c, nil)
 }
 
+// OrderClose 关闭订单
+// @Tags Admin-Payment
+// @Summary 关闭订单
+// @Description 关闭待支付订单
+// @Accept  json
+// @Produce  json
+// @Param body body IdForm true "订单ID"
+// @Success 200 {object} response.Response
+// @Router /api/admin/order/close [post]
+func (p *Payment) OrderClose(c *gin.Context) {
+	var form IdForm
+	if err := c.ShouldBindJSON(&form); err != nil {
+		response.Fail(c, 101, response.TranslateMsg(c, "ParamsError")+err.Error())
+		return
+	}
+
+	if err := service.AllService.SubscriptionService.CloseOrder(form.Id); err != nil {
+		response.Fail(c, 101, response.TranslateMsg(c, err.Error()))
+		return
+	}
+
+	response.Success(c, nil)
+}
+
 // ========== 订阅管理 ==========
 
 // SubscriptionList 订阅列表
