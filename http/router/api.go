@@ -179,6 +179,7 @@ func InternalRoutes(g *gin.Engine) {
 		i := &api.Internal{}
 		// Relay 白名单管理
 		internal.POST("/relay/allow", i.RelayAllow)
+		internal.POST("/relay/allow", i.RelayAllow)
 		internal.POST("/relay/consume", i.RelayConsume)
 		internal.GET("/relay/stats", i.RelayStats)
 		// 订阅状态检查 (支持 GET 和 POST，推荐 POST 以避免 token 泄露)
