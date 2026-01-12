@@ -1,4 +1,5 @@
 # Stage 1: Backend Build (Alpine-based for musl compatibility)
+ARG SERVER_IMAGE=ghcr.io/puyujian/rustdesk-server-s6:latest
 ARG GO_VERSION=1.23
 FROM golang:${GO_VERSION}-alpine AS builder-backend
 
@@ -42,8 +43,31 @@ RUN if [ "$COUNTRY" = "CN" ] ; then \
     fi && \
     npm install && npm run build
 
+# Stage 2.5: RustDesk Server Build (hbbs/hbbr)
+# MUST_LOGIN=Y 时，hbbr 会启用白名单扣次（/api/internal/relay/consume）。
+# 为避免桌面端出现“连接被中断/被关闭”（hbbr 报 not in whitelist），full-s6 镜像需要包含修复后的 hbbs/hbbr。
+FROM rust:alpine AS builder-rustdesk-server
+
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+RUN apk add --no-cache \
+    gcc \
+    g++ \
+    make \
+    musl-dev \
+    pkgconfig \
+    sqlite-dev \
+    libsodium-dev \
+    git \
+    perl
+
+WORKDIR /server
+COPY rustdesk-server /server
+
+RUN cargo build --release --bin hbbs --bin hbbr --bin rustdesk-utils
+
 # Stage 3: Final S6 Image
-FROM ghcr.io/puyujian/rustdesk-server-s6:latest AS server
+FROM ${SERVER_IMAGE} AS server
 
 FROM alpine:latest
 
@@ -69,9 +93,9 @@ COPY --from=server /init /init
 COPY --from=server /etc/s6-overlay /etc/s6-overlay
 COPY --from=server /package /package
 COPY --from=server /usr/bin/healthcheck.sh /usr/bin/healthcheck.sh
-COPY --from=server /usr/bin/hbbr /usr/bin/hbbr
-COPY --from=server /usr/bin/hbbs /usr/bin/hbbs
-COPY --from=server /usr/bin/rustdesk-utils /usr/bin/rustdesk-utils
+COPY --from=builder-rustdesk-server /server/target/release/hbbr /usr/bin/hbbr
+COPY --from=builder-rustdesk-server /server/target/release/hbbs /usr/bin/hbbs
+COPY --from=builder-rustdesk-server /server/target/release/rustdesk-utils /usr/bin/rustdesk-utils
 COPY --from=server /command /command
 
 # Setup s6 service for API
