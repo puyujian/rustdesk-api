@@ -1,15 +1,18 @@
 package api
 
 import (
+	"errors"
 	"html"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/lejianwen/rustdesk-api/v2/http/response"
 	"github.com/lejianwen/rustdesk-api/v2/model"
 	"github.com/lejianwen/rustdesk-api/v2/service"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Payment struct{}
@@ -79,7 +82,82 @@ func (p *Payment) Submit(c *gin.Context) {
 		return
 	}
 
-	order := service.AllService.SubscriptionService.GetOrderByOutTradeNo(outTradeNo)
+	// 防止连点/重复打开导致重复提交到网关（部分网关会因同 out_trade_no 重复建单报唯一约束冲突）
+	const (
+		submitDebounceSeconds = int64(3)
+		// 超过该时长的待支付订单视为“过期”，自动关闭并重新生成订单号再发起支付
+		pendingOrderStaleAfter = 30 * time.Minute
+	)
+
+	var order *model.Order
+	var blocked bool
+
+	err := service.DB.Transaction(func(tx *gorm.DB) error {
+		cur := &model.Order{}
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("out_trade_no = ?", outTradeNo).
+			First(cur).Error; err != nil {
+			return err
+		}
+
+		// 订单不存在/状态不正确/金额不合法：不做任何副作用
+		if cur.Id == 0 || cur.Status != model.OrderStatusPending || cur.Amount <= 0 || strings.TrimSpace(cur.AmountYuan) == "" {
+			order = cur
+			return nil
+		}
+
+		now := time.Now().Unix()
+		if cur.PaySubmitAt > 0 && now-cur.PaySubmitAt < submitDebounceSeconds {
+			blocked = true
+			order = cur
+			return nil
+		}
+
+		createdAt := time.Time(cur.CreatedAt)
+		isStale := !createdAt.IsZero() && time.Since(createdAt) > pendingOrderStaleAfter
+
+		// 已发起过支付或订单过期：关闭旧订单并生成新订单号，避免网关侧重复建单
+		if cur.PaySubmitAt > 0 || isStale {
+			if err := tx.Model(&model.Order{}).
+				Where("user_id = ? AND plan_id = ? AND status = ?", cur.UserId, cur.PlanId, model.OrderStatusPending).
+				Update("status", model.OrderStatusClosed).Error; err != nil {
+				return err
+			}
+
+			newOutTradeNo := service.AllService.SubscriptionService.GenerateOutTradeNo(cur.UserId)
+			newOrder := &model.Order{
+				UserId:      cur.UserId,
+				PlanId:      cur.PlanId,
+				OutTradeNo:  newOutTradeNo,
+				Subject:     cur.Subject,
+				Amount:      cur.Amount,
+				AmountYuan:  cur.AmountYuan,
+				Status:      model.OrderStatusPending,
+				PaySubmitAt: now,
+			}
+			if err := tx.Create(newOrder).Error; err != nil {
+				return err
+			}
+			order = newOrder
+			return nil
+		}
+
+		// 首次发起支付：记录发起时间用于防抖/重试判断
+		if err := tx.Model(cur).Update("pay_submit_at", now).Error; err != nil {
+			return err
+		}
+		cur.PaySubmitAt = now
+		order = cur
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.String(404, "订单不存在")
+			return
+		}
+		c.String(500, "系统错误")
+		return
+	}
 	if order == nil || order.Id == 0 {
 		c.String(404, "订单不存在")
 		return
@@ -90,6 +168,10 @@ func (p *Payment) Submit(c *gin.Context) {
 	}
 	if order.Amount <= 0 || strings.TrimSpace(order.AmountYuan) == "" {
 		c.String(200, "订单金额不合法")
+		return
+	}
+	if blocked {
+		c.String(200, "正在跳转，请勿重复提交")
 		return
 	}
 

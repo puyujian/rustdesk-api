@@ -61,6 +61,7 @@ type Order struct {
 	Amount        int64                 `json:"amount" gorm:"not null"`                   // 金额(分)
 	AmountYuan    string                `json:"amount_yuan" gorm:"not null"`              // 金额(元字符串,用于对账)
 	Status        int                   `json:"status" gorm:"default:0;index"`            // 状态: 0待支付 1已支付 2已退款 3已关闭
+	PaySubmitAt   int64                 `json:"pay_submit_at" gorm:"default:0"`           // 最近一次发起支付时间(秒)
 	PaidAt        int64                 `json:"paid_at" gorm:"default:0"`                 // 支付时间
 	RefundedAt    int64                 `json:"refunded_at" gorm:"default:0"`             // 退款时间
 	NotifyPayload string                `json:"notify_payload" gorm:"type:text"`          // 回调原始数据

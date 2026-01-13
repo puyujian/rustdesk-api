@@ -14,6 +14,12 @@ import (
 
 type SubscriptionService struct{}
 
+const (
+	// pendingOrderStaleAfter 待支付订单超过该时长后视为“过期”，将关闭并重新生成订单号再发起支付。
+	// 目的：避免部分支付网关对相同 out_trade_no 的重复提交报唯一约束冲突（例如 idx_orders_client_merchant_order）。
+	pendingOrderStaleAfter = 30 * time.Minute
+)
+
 // ========== 套餐管理 ==========
 
 // GetPlanById 根据ID获取套餐
@@ -115,12 +121,27 @@ func (ss *SubscriptionService) CreateOrder(userId, planId uint) (outTradeNo, pay
 	}
 
 	// 复用同一套餐的最新待支付订单，避免重复创建
+	// 注意：若订单已发起过支付（或太久未支付），继续复用同一个 out_trade_no 可能导致网关侧重复建单报错；
+	// 此时应关闭旧订单并重新生成 out_trade_no 发起支付。
 	existing := &model.Order{}
 	if err := DB.Where("user_id = ? AND plan_id = ? AND status = ?", userId, planId, model.OrderStatusPending).
 		Order("id DESC").
 		First(existing).Error; err == nil && existing.Id != 0 {
-		payURL = AllService.PaymentService.BuildPayURL(existing.OutTradeNo)
-		return existing.OutTradeNo, payURL, nil
+		createdAt := time.Time(existing.CreatedAt)
+		isStale := !createdAt.IsZero() && time.Since(createdAt) > pendingOrderStaleAfter
+
+		if existing.PaySubmitAt == 0 && !isStale {
+			payURL = AllService.PaymentService.BuildPayURL(existing.OutTradeNo)
+			return existing.OutTradeNo, payURL, nil
+		}
+
+		// 关闭该套餐下所有待支付订单，避免用户从订单列表“立即支付”时继续命中旧单
+		if err := DB.Model(&model.Order{}).
+			Where("user_id = ? AND plan_id = ? AND status = ?", userId, planId, model.OrderStatusPending).
+			Update("status", model.OrderStatusClosed).Error; err != nil {
+			Logger.Error("Close pending orders failed: ", err)
+			return "", "", err
+		}
 	}
 
 	// 2. 生成订单号
@@ -233,8 +254,9 @@ func (ss *SubscriptionService) HandleNotify(params map[string]string) error {
 			return nil // 已处理,直接返回成功
 		}
 		if order.Status == model.OrderStatusClosed {
-			Logger.Warn("Payment notify ignored for closed order: ", outTradeNo)
-			return nil // 已关闭订单,忽略
+			// 订单可能被用户重新发起支付时关闭（例如支付网关不允许同 out_trade_no 重复提交）。
+			// 一旦网关侧实际支付成功，我们仍应正常入账，避免资金损失。
+			Logger.Warn("Payment notify for closed order, will still process: ", outTradeNo)
 		}
 
 		// 5.3 校验金额(使用分为单位比较,更精确)
